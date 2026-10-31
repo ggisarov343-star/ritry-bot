@@ -1,87 +1,33 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f0f;color:white;font-family:Roboto,Arial;padding:0}
-.header{padding:12px 16px;font-size:18px;font-weight:500;background:#212121;position:sticky;top:0;z-index:10}
-.search-box{padding:12px;background:#0f0f0f;display:flex;gap:8px;position:sticky;top:46px;z-index:10}
-.search-box input{flex:1;background:#121212;border:1px solid #303030;border-radius:20px;padding:10px 16px;color:white;outline:none}
-.search-box button{background:#303030;border:none;border-radius:50%;width:40px;height:40px;color:white}
-.history{padding:0 16px}
-.history-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid #212121}
-.history-item span{display:flex;align-items:center;gap:12px}
-#results{padding:8px}
-.video{display:flex;gap:10px;padding:8px 0;cursor:pointer}
-.video img{width:160px;height:90px;border-radius:8px;object-fit:cover;background:#212121}
-.video .info{flex:1}
-.video .title{font-size:14px;line-height:18px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.video .channel{font-size:12px;color:#aaa;margin-top:4px}
-.loader{text-align:center;padding:20px;color:#aaa}
-</style>
-</head>
-<body>
-<div class="header">Скачать видео и...</div>
-<div class="search-box">
-<input id="q" type="text" placeholder="Поиск на YouTube" onkeydown="if(event.key==='Enter') doSearch()">
-<button onclick="doSearch()">🔍</button>
-</div>
-
-<div id="hist" class="history">
-<div class="history-item" onclick="setQ('бемире ин дилам')"><span>🕒 бемире ин дилам</span><span>↗</span></div>
-<div class="history-item" onclick="setQ('барои ман гиря накун')"><span>🕒 барои ман гиря накун</span><span>↗</span></div>
-</div>
-
-<div id="results"></div>
-
-<script>
-let tg = window.Telegram.WebApp;
-tg.expand();
-tg.enableClosingConfirmation();
-
-function setQ(t){
- document.getElementById('q').value=t;
- doSearch();
-}
-
 async function doSearch(){
- let query = document.getElementById('q').value.trim();
+ let query=document.getElementById('q').value.trim();
  if(!query) return;
  document.getElementById('hist').style.display='none';
- document.getElementById('results').innerHTML='<div class="loader">Ищу...</div>';
- try{
-   // Используем Piped API - бесплатный поиск YouTube
-   let res = await fetch('https://pipedapi.kavin.rocks/search?q='+encodeURIComponent(query));
-   let data = await res.json();
-   let items = data.items || [];
+ document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center;color:#aaa">Ищу...</div>';
+ let apis = [
+   'https://inv.nadeko.net/api/v1/search?q=',
+   'https://y.com.sb/api/v1/search?q=',
+   'https://invidious.io.lol/api/v1/search?q='
+ ];
+ for(let api of apis){
+  try{
+   let r=await fetch(api+encodeURIComponent(query));
+   if(!r.ok) continue;
+   let j=await r.json();
    let html='';
-   items.forEach(item=>{
-     if(item.type!=='stream') return;
-     let id = item.url.split('v=')[1] || item.url.split('/').pop();
-     let thumb = item.thumbnail || 'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
-     html+=`<div class="video" onclick="selectVideo('${id}')">
+   j.forEach(it=>{
+     if(it.type!=='video') return;
+     let id=it.videoId;
+     let thumb=it.videoThumbnails ? it.videoThumbnails[2].url : 'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
+     html+=`<div class="v" onclick="pick('${id}')">
        <img src="${thumb}">
-       <div class="info">
-         <div class="title">${item.title}</div>
-         <div class="channel">${item.uploaderName||''} • ${item.views||''}</div>
-       </div>
+       <div><div class="t">${it.title}</div><div class="c">${it.author}<br>${it.viewCountText||''} • ${it.publishedText||''}</div></div>
+       <div class="right">⋮<span onclick="event.stopPropagation();pick('${id}')">⬇</span></div>
      </div>`;
    });
-   if(!html) html='<div class="loader">Ничего не нашел</div>';
-   document.getElementById('results').innerHTML=html;
- }catch(e){
-   document.getElementById('results').innerHTML='<div class="loader">Ошибка: '+e+'</div>';
+   if(html){ document.getElementById('res').innerHTML=html; return; }
+  }catch(e){ console.log('api fail', api, e); }
  }
+ // Если все API не работают - отправляем поиск в бота
+ document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center">Ищу через бота...</div>';
+ tg.sendData(query);
 }
-
-function selectVideo(id){
- let url = 'https://www.youtube.com/watch?v='+id;
- // Отправляем ссылку в бот - бот сразу покажет кнопки Скачать
- tg.sendData(url);
-}
-</script>
-</body>
-</html>
