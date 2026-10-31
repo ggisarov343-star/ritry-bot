@@ -1,33 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f0f;color:#fff;font-family:Roboto,Arial}
+.top{position:sticky;top:0;background:#0f0f0f;padding:12px;display:flex;gap:10px;align-items:center}
+.top input{flex:1;background:#212121;border:none;border-radius:20px;padding:12px 16px;color:white;outline:none}
+.top button{background:#303030;border:none;border-radius:50%;width:40px;height:40px}
+.hist{padding:0 12px}
+.hi{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid #212121}
+.v{display:flex;gap:10px;padding:10px 12px}
+.v img{width:150px;height:85px;border-radius:8px;object-fit:cover}
+.v .t{font-size:14px}
+.v .c{font-size:12px;color:#aaa}
+</style>
+</head>
+<body>
+<div class="top">
+<input id="q" placeholder="Поиск на YouTube" onkeydown="if(event.key==='Enter') doSearch()">
+<button onclick="doSearch()">🔍</button>
+</div>
+<div id="hist" class="hist">
+<div class="hi" onclick="setQ('Ману бегир')"><span>🕒 Ману бегир</span><span>↗</span></div>
+<div class="hi" onclick="setQ('бемире ин дилам')"><span>🕒 бемире ин дилам</span><span>↗</span></div>
+</div>
+<div id="res"></div>
+<script>
+let tg=Telegram.WebApp; tg.expand();
+function setQ(t){document.getElementById('q').value=t; doSearch();}
 async function doSearch(){
  let query=document.getElementById('q').value.trim();
  if(!query) return;
  document.getElementById('hist').style.display='none';
- document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center;color:#aaa">Ищу...</div>';
- let apis = [
-   'https://inv.nadeko.net/api/v1/search?q=',
-   'https://y.com.sb/api/v1/search?q=',
-   'https://invidious.io.lol/api/v1/search?q='
- ];
- for(let api of apis){
-  try{
-   let r=await fetch(api+encodeURIComponent(query));
-   if(!r.ok) continue;
-   let j=await r.json();
-   let html='';
-   j.forEach(it=>{
-     if(it.type!=='video') return;
-     let id=it.videoId;
-     let thumb=it.videoThumbnails ? it.videoThumbnails[2].url : 'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
-     html+=`<div class="v" onclick="pick('${id}')">
-       <img src="${thumb}">
-       <div><div class="t">${it.title}</div><div class="c">${it.author}<br>${it.viewCountText||''} • ${it.publishedText||''}</div></div>
-       <div class="right">⋮<span onclick="event.stopPropagation();pick('${id}')">⬇</span></div>
-     </div>`;
-   });
-   if(html){ document.getElementById('res').innerHTML=html; return; }
-  }catch(e){ console.log('api fail', api, e); }
- }
- // Если все API не работают - отправляем поиск в бота
- document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center">Ищу через бота...</div>';
+ document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center">Ищу...</div>';
+ try{
+  let r=await fetch('https://y.com.sb/api/v1/search?q='+encodeURIComponent(query));
+  let j=await r.json();
+  let html='';
+  j.forEach(it=>{
+    if(it.type!=='video') return;
+    let id=it.videoId;
+    let thumb=it.videoThumbnails ? it.videoThumbnails[2].url : 'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
+    html+=`<div class="v" onclick="pick('${id}')"><img src="${thumb}"><div><div class="t">${it.title}</div><div class="c">${it.author}</div></div></div>`;
+  });
+  if(html){document.getElementById('res').innerHTML=html; return;}
+ }catch(e){}
  tg.sendData(query);
 }
+function pick(id){ tg.sendData('https://www.youtube.com/watch?v='+id); }
+</script>
+</body>
+</html>
