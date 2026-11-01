@@ -6,41 +6,80 @@
 <title>Ritri_YouTube</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-body{background:#000;color:#fff;font-family:Arial;padding:20px;margin:0}
-.search-box{display:flex;gap:10px;margin-bottom:20px}
-input{flex:1;background:#222;border:none;color:#fff;padding:15px;border-radius:25px;outline:none;font-size:16px}
-button{background:#333;border:none;color:#fff;width:50px;height:50px;border-radius:50%;font-size:20px;cursor:pointer}
-.result{background:#111;padding:15px;border-radius:10px;margin-bottom:10px;cursor:pointer}
-.result:active{background:#222}
+*{box-sizing:border-box}
+body{background:#000;color:#fff;font-family:Arial;padding:15px;margin:0}
+.top{display:flex;gap:10px;position:sticky;top:0;background:#000;padding:10px 0;z-index:10}
+input{flex:1;background:#1e1e1e;border:1px solid #333;color:#fff;padding:14px 20px;border-radius:25px;outline:none;font-size:16px}
+button{background:#2a2a2a;border:none;color:#fff;width:50px;height:50px;border-radius:50%;font-size:20px;cursor:pointer}
+button:active{background:#444}
+#status{text-align:center;color:#888;margin:20px 0}
+.item{background:#151515;padding:12px;border-radius:12px;margin-bottom:10px;display:flex;gap:12px;cursor:pointer;border:1px solid #222}
+.item:active{background:#222}
+.item img{width:90px;height:60px;object-fit:cover;border-radius:8px;background:#222}
+.item .title{font-size:14px;line-height:1.3;flex:1}
+.item .ch{font-size:12px;color:#888;margin-top:4px}
 </style>
 </head>
 <body>
-<div class="search-box">
+<div class="top">
 <input id="q" type="text" placeholder="Ману бегир" />
 <button onclick="doSearch()">🔍</button>
 </div>
-<div id="results">Напиши название песни</div>
+<div id="status">Напиши название песни и нажми поиск</div>
+<div id="results"></div>
 
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-function doSearch(){
+async function doSearch(){
     const query = document.getElementById('q').value.trim();
-    if(!query){ return; }
-    document.getElementById('results').innerHTML = 'Ищу...';
-    
-    // Отправляем запрос боту
-    tg.sendData(query);
-    
-    // Закрываем окно через секунду
-    setTimeout(()=>{ tg.close(); }, 500);
+    if(!query) return;
+    document.getElementById('status').innerText = 'Ищу...';
+    document.getElementById('results').innerHTML = '';
+
+    try {
+        // Ищем через Piped API (работает без ключа)
+        const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`);
+        const data = await res.json();
+        
+        if(!data.items || data.items.length === 0){
+            document.getElementById('status').innerText = 'Ничего не нашел';
+            return;
+        }
+        
+        document.getElementById('status').innerText = `Нашел: ${data.items.length}`;
+        const container = document.getElementById('results');
+        container.innerHTML = '';
+        
+        data.items.slice(0,15).forEach(v=>{
+            if(v.type !== 'stream') return;
+            const div = document.createElement('div');
+            div.className = 'item';
+            div.innerHTML = `
+                <img src="${v.thumbnail}" onerror="this.src='https://i.ytimg.com/vi/${v.url.split('v=')[1]}/mqdefault.jpg'">
+                <div>
+                    <div class="title">${v.title}</div>
+                    <div class="ch">${v.uploaderName || ''} • ${v.duration || ''}</div>
+                </div>
+            `;
+            div.onclick = ()=>{
+                const fullUrl = `https://www.youtube.com${v.url}`;
+                tg.sendData(fullUrl); // отправляем ссылку боту
+            };
+            container.appendChild(div);
+        });
+    } catch(e){
+        // Фолбек: если API не работает, просто отправляем текст боту как раньше
+        console.log(e);
+        document.getElementById('status').innerText = 'Отправляю боту...';
+        tg.sendData(query);
+    }
 }
 
-// Поиск по Enter
-document.getElementById('q').addEventListener('keypress', function(e){
-    if(e.key === 'Enter'){ doSearch(); }
+document.getElementById('q').addEventListener('keypress', e=>{
+    if(e.key === 'Enter') doSearch();
 });
 </script>
 </body>
