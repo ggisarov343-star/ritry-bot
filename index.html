@@ -3,84 +3,121 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ritri_YouTube</title>
+<title>Ritri YouTube</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box}
-body{background:#000;color:#fff;font-family:Arial;padding:15px;margin:0}
-.top{display:flex;gap:10px;position:sticky;top:0;background:#000;padding:10px 0;z-index:10}
-input{flex:1;background:#1e1e1e;border:1px solid #333;color:#fff;padding:14px 20px;border-radius:25px;outline:none;font-size:16px}
-button{background:#2a2a2a;border:none;color:#fff;width:50px;height:50px;border-radius:50%;font-size:20px;cursor:pointer}
-button:active{background:#444}
-#status{text-align:center;color:#888;margin:20px 0}
-.item{background:#151515;padding:12px;border-radius:12px;margin-bottom:10px;display:flex;gap:12px;cursor:pointer;border:1px solid #222}
-.item:active{background:#222}
-.item img{width:90px;height:60px;object-fit:cover;border-radius:8px;background:#222}
-.item .title{font-size:14px;line-height:1.3;flex:1}
-.item .ch{font-size:12px;color:#888;margin-top:4px}
+body{margin:0;background:#0f0f0f;color:#fff;font-family:Roboto,Arial}
+.header{position:sticky;top:0;background:#0f0f0f;padding:10px;display:flex;gap:8px;z-index:20;border-bottom:1px solid #222}
+.header input{flex:1;background:#121212;border:1px solid #303030;color:#fff;padding:12px 16px;border-radius:20px;outline:none;font-size:15px}
+.header button{background:#222;border:none;color:#fff;width:42px;height:42px;border-radius:50%;cursor:pointer}
+#player{display:none;background:#000;aspect-ratio:16/9;width:100%}
+#player iframe{width:100%;height:100%;border:none}
+#player .controls{display:flex;gap:8px;padding:10px;background:#0f0f0f}
+.controls button{flex:1;padding:12px;border-radius:20px;border:none;font-weight:bold;cursor:pointer}
+.btn-watch{background:#fff;color:#000}
+.btn-down{background:#3ea6ff;color:#000}
+#status{text-align:center;color:#aaa;padding:20px;font-size:14px}
+.video{display:flex;gap:10px;padding:10px;border-bottom:1px solid #1a1a1a;cursor:pointer}
+.video:active{background:#1a1a1a}
+.video img{width:160px;height:90px;object-fit:cover;border-radius:10px;background:#222;flex-shrink:0}
+.video .info{flex:1;min-width:0}
+.video .title{font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.video .meta{font-size:12px;color:#aaa;margin-top:6px}
 </style>
 </head>
 <body>
-<div class="top">
-<input id="q" type="text" placeholder="Ману бегир" />
-<button onclick="doSearch()">🔍</button>
+<div class="header">
+<input id="q" type="text" placeholder="Ману бегир" value="Манам саргаштаи" />
+<button onclick="search()">🔍</button>
 </div>
-<div id="status">Напиши название песни и нажми поиск</div>
-<div id="results"></div>
+
+<div id="player">
+<iframe id="ytframe" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+<div class="controls">
+<button class="btn-watch" onclick="document.getElementById('player').scrollIntoView()">▶ Смотреть</button>
+<button class="btn-down" id="downBtn">⬇ Скачать в боте</button>
+</div>
+</div>
+
+<div id="status">Нажми поиск</div>
+<div id="list"></div>
 
 <script>
 const tg = window.Telegram.WebApp;
-tg.expand();
-tg.ready();
+tg.expand(); tg.ready();
+let currentVideoId = null;
 
-async function doSearch(){
-    const query = document.getElementById('q').value.trim();
-    if(!query) return;
-    document.getElementById('status').innerText = 'Ищу...';
-    document.getElementById('results').innerHTML = '';
+async function search(){
+  const q = document.getElementById('q').value.trim();
+  if(!q) return;
+  document.getElementById('status').innerText = 'Ищу...';
+  document.getElementById('list').innerHTML = '';
 
-    try {
-        // Ищем через Piped API (работает без ключа)
-        const res = await fetch(`https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(query)}&filter=music_songs`);
-        const data = await res.json();
-        
-        if(!data.items || data.items.length === 0){
-            document.getElementById('status').innerText = 'Ничего не нашел';
-            return;
-        }
-        
-        document.getElementById('status').innerText = `Нашел: ${data.items.length}`;
-        const container = document.getElementById('results');
-        container.innerHTML = '';
-        
-        data.items.slice(0,15).forEach(v=>{
-            if(v.type !== 'stream') return;
-            const div = document.createElement('div');
-            div.className = 'item';
-            div.innerHTML = `
-                <img src="${v.thumbnail}" onerror="this.src='https://i.ytimg.com/vi/${v.url.split('v=')[1]}/mqdefault.jpg'">
-                <div>
-                    <div class="title">${v.title}</div>
-                    <div class="ch">${v.uploaderName || ''} • ${v.duration || ''}</div>
-                </div>
-            `;
-            div.onclick = ()=>{
-                const fullUrl = `https://www.youtube.com${v.url}`;
-                tg.sendData(fullUrl); // отправляем ссылку боту
-            };
-            container.appendChild(div);
-        });
-    } catch(e){
-        // Фолбек: если API не работает, просто отправляем текст боту как раньше
-        console.log(e);
-        document.getElementById('status').innerText = 'Отправляю боту...';
-        tg.sendData(query);
-    }
+  // 3 API для надежности
+  const apis = [
+    `https://inv.nadeko.net/api/v1/search?q=${encodeURIComponent(q)}`,
+    `https://invidious.flokinet.to/api/v1/search?q=${encodeURIComponent(q)}`,
+    `https://pipedapi.kavin.rocks/search?q=${encodeURIComponent(q)}`
+  ];
+
+  for(let api of apis){
+    try{
+      const r = await fetch(api);
+      const data = await r.json();
+      let items = data.items || data;
+      if(!items || items.length===0) continue;
+
+      document.getElementById('status').innerText = `Нашел ${items.length} видео - нажми чтобы посмотреть`;
+      render(items.slice(0,30));
+      return;
+    }catch(e){ console.log('API fail', api, e); }
+  }
+  
+  document.getElementById('status').innerText = 'Не получилось, попробуй еще раз (включи VPN)';
 }
 
-document.getElementById('q').addEventListener('keypress', e=>{
-    if(e.key === 'Enter') doSearch();
-});
+function render(items){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  items.forEach(v=>{
+    let vid, title, thumb, author;
+    // Piped format
+    if(v.url && v.title){ 
+      vid = v.url.split('v=')[1] || v.url.split('/').pop();
+      title = v.title; thumb = v.thumbnail; author = v.uploaderName;
+    } else { // Invidious format
+      vid = v.videoId; title = v.title; thumb = v.videoThumbnails ? v.videoThumbnails[2].url : `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`; author = v.author;
+    }
+    if(!vid) return;
+    
+    const div = document.createElement('div');
+    div.className = 'video';
+    div.innerHTML = `<img src="${thumb}" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${vid}/mqdefault.jpg'"><div class="info"><div class="title">${title}</div><div class="meta">${author || ''}</div></div>`;
+    div.onclick = ()=> play(vid, title);
+    list.appendChild(div);
+  });
+}
+
+function play(videoId, title){
+  currentVideoId = videoId;
+  document.getElementById('player').style.display = 'block';
+  document.getElementById('ytframe').src = `https://www.youtube.com/embed/${videoId}?autoplay=1&playsinline=1`;
+  document.getElementById('player').scrollIntoView({behavior:'smooth'});
+  document.getElementById('downBtn').innerText = `⬇ Скачать: ${title.slice(0,20)}...`;
+}
+
+document.getElementById('downBtn').onclick = ()=>{
+  if(!currentVideoId) return;
+  const url = `https://www.youtube.com/watch?v=${currentVideoId}`;
+  tg.sendData(url);
+  tg.showPopup({message: 'Отправил боту! Видео придет в чат бота'});
+};
+
+document.getElementById('q').addEventListener('keypress', e=>{ if(e.key==='Enter') search(); });
+
+// Авто-поиск при открытии
+search();
 </script>
 </body>
 </html>
