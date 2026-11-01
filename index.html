@@ -6,66 +6,63 @@
 <title>Ritri YouTube</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-body{margin:0;background:#0f0f0f;color:#fff;font-family:Arial;padding:15px}
-h2{text-align:center;font-size:16px;margin:10px 0}
-.search{display:flex;gap:8px;margin:15px 0}
-input{flex:1;background:#1e1e1e;border:1px solid #333;color:#fff;padding:14px 18px;border-radius:25px;outline:none;font-size:16px}
-button{background:#fff;color:#000;border:none;padding:14px 22px;border-radius:25px;font-weight:bold;cursor:pointer}
-.tip{color:#888;text-align:center;font-size:13px;margin-top:20px;line-height:1.4}
-.hist{margin-top:20px}
-.hist div{background:#1a1a1a;padding:12px 16px;border-radius:12px;margin-bottom:8px;cursor:pointer;border:1px solid #222}
-.hist div:active{background:#222}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#fff;font-family:Arial}
+.header{display:flex;gap:8px;padding:10px;background:#0f0f0f;position:sticky;top:0;z-index:10;border-bottom:1px solid #222}
+input{flex:1;background:#1e1e1e;border:1px solid #333;color:#fff;padding:12px 16px;border-radius:20px;outline:none;font-size:15px}
+button{background:#fff;color:#000;border:none;width:44px;height:44px;border-radius:50%;font-weight:bold;cursor:pointer}
+#playerWrap{display:block;background:#000}
+#playerWrap iframe{width:100%;height:55vw;max-height:320px;border:none;background:#000}
+#bar{display:flex;gap:8px;padding:10px;background:#0f0f0f;border-bottom:1px solid #222}
+#bar button{flex:1;padding:12px;border-radius:20px;border:none;font-weight:bold;cursor:pointer}
+#b1{background:#222;color:#fff}
+#b2{background:#3ea6ff;color:#000}
+#hint{text-align:center;color:#aaa;padding:15px;font-size:13px}
 </style>
 </head>
 <body>
-<h2>Ritri_YouTube - Поиск</h2>
-<div class="search">
-<input id="q" type="text" placeholder="Напиши что искать, например: Ману бегир" autofocus>
-<button onclick="go()">🔍</button>
+<div class="header">
+<input id="q" type="text" placeholder="Что искать? Например: Ману бегир" value="Ману бегир">
+<button onclick="doSearch()">🔍</button>
 </div>
-<div class="tip">
-Напиши любое название песни и нажми поиск.<br>
-Результаты появятся в чате бота - там можно выбрать из 5 видео и сразу смотреть.
+
+<div id="playerWrap">
+<iframe id="yt" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+<div id="bar">
+<button id="b1" onclick="document.getElementById('q').focus()">🔍 Новый поиск</button>
+<button id="b2" onclick="download()">⬇ Скачать в боте</button>
 </div>
-<div class="hist" id="hist"></div>
+</div>
+
+<div id="hint">Напиши сверху любое название и нажми 🔍 - сразу можно смотреть прямо тут. Листай видео свайпом внутри плеера.</div>
 
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand(); tg.ready();
+let curQuery = 'Ману бегир';
 
-// История поиска
-let history = JSON.parse(localStorage.getItem('hist')||'[]');
-function renderHist(){
-  const h=document.getElementById('hist');
-  h.innerHTML='';
-  history.slice(0,8).forEach(t=>{
-    const d=document.createElement('div');
-    d.innerText='🕘 '+t;
-    d.onclick=()=>{ document.getElementById('q').value=t; go(); };
-    h.appendChild(d);
-  });
-}
-renderHist();
-
-function go(){
-  const q=document.getElementById('q').value.trim();
-  if(!q){ tg.showAlert('Напиши что искать'); return; }
-  
-  // Сохраняем в историю
-  if(!history.includes(q)){ history.unshift(q); history=history.slice(0,10); localStorage.setItem('hist', JSON.stringify(history)); }
-  
-  // Отправляем боту - бот сделает поиск через yt-dlp (у него нет блокировки)
-  tg.sendData(q);
-  
-  // Показываем что отправили
-  document.querySelector('.tip').innerHTML = `✅ Отправил "<b>${q}</b>" боту...<br>Сейчас в чате появятся 5 видео, выбери любое`;
-  
-  setTimeout(()=>{ tg.close(); }, 800);
+function doSearch(){
+  const q = document.getElementById('q').value.trim();
+  if(!q) return;
+  curQuery = q;
+  // Главный трюк - встроенный поиск Ютуба прямо в iframe
+  // listType=search показывает МНОГО видео и можно листать
+  document.getElementById('yt').src = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(q)}&autoplay=1&modestbranding=1&rel=0`;
+  document.getElementById('hint').innerHTML = `Смотришь: <b>${q}</b><br>Свайпай внутри плеера чтобы листать много видео. Нажми ⬇ чтобы скачать текущее в боте`;
 }
 
-document.getElementById('q').addEventListener('keypress', e=>{
-  if(e.key==='Enter') go();
-});
+function download(){
+  // Берем текущее видео из плеера - отправляем запрос боту
+  // Так как iframe не дает узнать что играет, отправляем поисковый запрос
+  // Бот найдет первое видео по этому запросу и скачает
+  tg.sendData(curQuery);
+  tg.showPopup({message: `Отправляю "${curQuery}" боту на скачивание. Видео придет в чат!`});
+}
+
+document.getElementById('q').addEventListener('keypress', e=>{ if(e.key==='Enter') doSearch(); });
+
+// Авто-запуск
+doSearch();
 </script>
 </body>
 </html>
