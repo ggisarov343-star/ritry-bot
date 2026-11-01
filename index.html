@@ -12,27 +12,26 @@ body{background:#0f0f0f;color:#fff;font-family:Arial}
 .top button{background:#fff;color:#000;border:none;border-radius:50%;width:42px;height:42px;font-weight:bold}
 .v{display:flex;gap:10px;padding:12px;border-bottom:1px solid #1a1a1a}
 .v img{width:150px;height:85px;border-radius:8px;background:#222;object-fit:cover}
-.v .t{font-size:14px}
+.v .t{font-size:14px;line-height:1.3}
 .v .c{font-size:12px;color:#aaa;margin-top:4px}
 #player{position:fixed;inset:0;background:#000;z-index:100;display:none;flex-direction:column;overflow-y:auto}
 #player iframe{width:100%;aspect-ratio:16/9;border:none;background:#000}
-#player .p-info{padding:12px}
 .btn{display:block;margin:10px 12px 0;background:#222;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:bold;width:calc(100% - 24px);text-align:center;text-decoration:none}
 .btn.green{background:#00e676;color:#000}
 .btn.blue{background:#3ea6ff;color:#fff}
 .close{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.8);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;z-index:101}
-#status{text-align:center;color:#888;padding:15px;font-size:13px}
+#status{text-align:center;color:#888;padding:15px;font-size:13px;white-space:pre-line}
 </style>
 </head>
 <body>
-<div class="top"><input id="q" placeholder="Что искать?"><button onclick="search()">🔍</button></div>
+<div class="top"><input id="q" placeholder="Марина, Фильмы, Музыка..."><button onclick="search()">🔍</button></div>
 <div id="status">Напиши что искать</div>
 <div id="list"></div>
 
 <div id="player">
 <button class="close" onclick="closePlayer()">✕</button>
 <iframe id="frm" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-<div class="p-info">
+<div style="padding:12px">
 <div id="p-title" style="font-weight:bold"></div>
 <div id="p-chan" style="color:#aaa;font-size:13px;margin-top:4px"></div>
 <div id="dls"></div>
@@ -42,49 +41,103 @@ body{background:#0f0f0f;color:#fff;font-family:Arial}
 
 <script>
 const tg = window.Telegram.WebApp; try{tg.expand();tg.ready();}catch(e){}
-let curBase=null;
-const SERVERS=['https://yewtu.be','https://vid.puffyan.us','https://invidious.flokinet.to'];
+let curBase = 'https://yewtu.be';
+
+// 1. Piped API - работает в TJ лучше всего
+const PIPED = ['https://pipedapi.kavin.rocks','https://api.piped.private.coffee','https://pipedapi.adminforge.de'];
+// 2. Invidious
+const INVID = ['https://yewtu.be','https://vid.puffyan.us','https://invidious.flokinet.to','https://inv.nadeko.net'];
+
+async function fetchWithProxy(url){
+  // пробуем напрямую
+  try{
+    const r = await fetch(url,{signal:AbortSignal.timeout(5000)});
+    if(r.ok) return r;
+  }catch(e){}
+  // пробуем через прокси - обходит блокировку TJ
+  try{
+    const r = await fetch('https://corsproxy.io/?'+encodeURIComponent(url),{signal:AbortSignal.timeout(7000)});
+    if(r.ok) return r;
+  }catch(e){}
+  throw 0;
+}
 
 async function search(){
   const q=document.getElementById('q').value.trim(); if(!q) return;
-  document.getElementById('status').innerText='Ищу...'; document.getElementById('list').innerHTML='';
-  for(let base of SERVERS){
+  document.getElementById('status').innerText='Ищу через прокси...\n(в TJ это дольше, подожди 5 сек)';
+  document.getElementById('list').innerHTML='';
+  
+  // СНАЧАЛА PIPED - он не блокируется
+  for(let base of PIPED){
     try{
-      const r=await fetch(base+'/api/v1/search?q='+encodeURIComponent(q),{signal:AbortSignal.timeout(6000)});
-      if(!r.ok) continue;
-      const j=await r.json();
-      const vids=j.filter(x=>x.type==='video').slice(0,30);
-      if(!vids.length) continue;
-      curBase=base;
-      document.getElementById('status').innerText='Нашел '+vids.length+' через '+base.replace('https://','');
-      const list=document.getElementById('list'); list.innerHTML='';
-      vids.forEach((v,i)=>{
-        let thumb=v.videoThumbnails?.[1]?.url||`https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
-        if(thumb.startsWith('/')) thumb=base+thumb;
-        const d=document.createElement('div'); d.className='v';
-        d.innerHTML=`<img src="${thumb}"><div><div class="t">${i+1}. ${v.title}</div><div class="c">${v.author}</div></div>`;
-        d.onclick=()=>openPlayer(v.videoId,v.title,v.author);
-        list.appendChild(d);
-      });
-      return;
-    }catch(e){console.log('fail',base)}
+      const r = await fetchWithProxy(base+'/search?q='+encodeURIComponent(q));
+      const j = await r.json();
+      const items = (j.items||j).filter(i=>i.type==='stream' || i.type==='video').slice(0,30);
+      if(!items.length) continue;
+      // конвертируем под наш формат
+      const vids = items.map(i=>({
+        videoId: (i.url||'').split('v=')[1] || i.videoId || i.id,
+        title: i.title,
+        author: i.uploaderName || i.author,
+        thumb: i.thumbnail || (i.thumbnails?i.thumbnails[0]:''),
+        viewCountText: i.views ? i.views.toLocaleString()+' просм.' : ''
+      })).filter(v=>v.videoId);
+      
+      if(vids.length){
+        curBase = 'https://yewtu.be'; // для плеера и скачки используем yewtu
+        show(vids);
+        return;
+      }
+    }catch(e){console.log('piped fail',base)}
   }
-  document.getElementById('status').innerText='Не нашло. Попробуй еще раз.';
+
+  // ПОТОМ INVIDIOUS
+  for(let base of INVID){
+    try{
+      const r = await fetchWithProxy(base+'/api/v1/search?q='+encodeURIComponent(q));
+      const j = await r.json();
+      const vids = j.filter(x=>x.type==='video').slice(0,30);
+      if(!vids.length) continue;
+      curBase = base;
+      show(vids.map(v=>({
+        videoId: v.videoId,
+        title: v.title,
+        author: v.author,
+        thumb: v.videoThumbnails?.[1]?.url || `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`,
+        viewCountText: v.viewCountText||''
+      })));
+      return;
+    }catch(e){console.log('invid fail',base)}
+  }
+
+  document.getElementById('status').innerText='Все сервера заблокированы 😔\nВключи VPN на 10 секунд и нажми поиск еще раз, после этого будет работать и без VPN';
+}
+
+function show(vids){
+  document.getElementById('status').innerText='Нашел '+vids.length;
+  const list=document.getElementById('list'); list.innerHTML='';
+  vids.forEach((v,i)=>{
+    let thumb=v.thumb||`https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
+    if(thumb && thumb.startsWith('/')) thumb=curBase+thumb;
+    const d=document.createElement('div'); d.className='v';
+    d.innerHTML=`<img src="${thumb}" loading="lazy" onerror="this.src='https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg'"><div><div class="t">${i+1}. ${v.title}</div><div class="c">${v.author} • ${v.viewCountText}</div></div>`;
+    d.onclick=()=>openPlayer(v.videoId,v.title,v.author);
+    list.appendChild(d);
+  });
 }
 
 function openPlayer(id,title,author){
   document.getElementById('player').style.display='flex';
   document.getElementById('p-title').innerText=title;
   document.getElementById('p-chan').innerText=author;
+  // Плеер через yewtu - он работает в TJ
   document.getElementById('frm').src=curBase+'/embed/'+id+'?autoplay=1';
 
-  // ВОТ ТУТ СКАЧИВАНИЕ ПРЯМО ВО 2-М ОКНЕ
-  const dls=document.getElementById('dls');
-  dls.innerHTML=`
-    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=22" target="_blank">⬇ Скачать 720p (MP4)</a>
-    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=18" target="_blank">⬇ Скачать 360p (MP4)</a>
-    <a class="btn blue" href="${curBase}/latest_version?id=${id}&itag=140" target="_blank">⬇ Скачать только звук (M4A)</a>
-    <div style="color:#666;font-size:11px;text-align:center;margin-top:8px">Если не качает - нажми и держи кнопку -> Скачать по ссылке</div>
+  // СКАЧИВАНИЕ ПРЯМО ВО 2-М ОКНЕ
+  document.getElementById('dls').innerHTML=`
+    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=22" target="_blank">⬇ Скачать 720p MP4</a>
+    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=18" target="_blank">⬇ Скачать 360p MP4</a>
+    <a class="btn blue" href="${curBase}/latest_version?id=${id}&itag=140" target="_blank">⬇ Скачать звук M4A</a>
   `;
 }
 
@@ -92,7 +145,6 @@ function closePlayer(){
   document.getElementById('player').style.display='none';
   document.getElementById('frm').src='about:blank';
 }
-document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 </script>
 </body>
 </html>
