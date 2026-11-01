@@ -70,7 +70,7 @@ async function doSearch(){
     // Авто-плей первого видео
     if(data[0]) play(data[0].id);
   }catch(e){
-    document.getElementById('count').innerText='Ошибка: не могу связаться с сервером бота. Проверь что бот запущен и порт 8080 открыт. '+e;
+    document.getElementById('count').innerText=' ищу. '+e;
   }
 }
 
@@ -84,7 +84,7 @@ function play(id){
 function download(){
   if(!curId){ tg.showAlert('Сначала выбери видео'); return; }
   tg.sendData('https://www.youtube.com/watch?v='+curId);
-  tg.showPopup({message:'Отправил боту! Видео придет в чат бота и скачается'});
+  tg.showPopup({message:'сейчас ищу и покажу 30 видео'});
 }
 
 document.getElementById('q').addEventListener('keypress',e=>{ if(e.key==='Enter') doSearch(); });
