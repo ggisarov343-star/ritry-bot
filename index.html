@@ -1,71 +1,47 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ritri_YouTube</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f0f;color:#fff;font-family:Roboto,Arial}
-.top{position:sticky;top:0;background:#0f0f0f;padding:10px;display:flex;gap:8px;z-index:10}
-.top input{flex:1;background:#212121;border:none;border-radius:20px;padding:12px 16px;color:white;outline:none}
-.top button{background:#303030;border:none;border-radius:50%;width:40px;height:40px}
-.v{display:flex;gap:10px;padding:10px 12px}
-.v img{width:150px;height:85px;border-radius:8px}
-.v .t{font-size:14px}
-.v .c{font-size:12px;color:#aaa}
-#player{position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:100;display:none;flex-direction:column}
-#player iframe{width:100%;height:220px;border:none}
-#player .p-info{padding:12px}
-#player .btn{margin:12px;background:#3ea6ff;color:white;border:none;border-radius:8px;padding:12px;text-align:center;font-weight:bold}
-.back-btn{padding:12px}
+body{background:#000;color:#fff;font-family:Arial;padding:20px;margin:0}
+.search-box{display:flex;gap:10px;margin-bottom:20px}
+input{flex:1;background:#222;border:none;color:#fff;padding:15px;border-radius:25px;outline:none;font-size:16px}
+button{background:#333;border:none;color:#fff;width:50px;height:50px;border-radius:50%;font-size:20px;cursor:pointer}
+.result{background:#111;padding:15px;border-radius:10px;margin-bottom:10px;cursor:pointer}
+.result:active{background:#222}
 </style>
 </head>
 <body>
-<div class="top">
-<input id="q" placeholder="Поиск на YouTube" onkeydown="if(event.key==='Enter') doSearch()">
+<div class="search-box">
+<input id="q" type="text" placeholder="Ману бегир" />
 <button onclick="doSearch()">🔍</button>
 </div>
-<div id="res" style="padding-top:8px"></div>
-
-<div id="player">
-<div class="back-btn" onclick="closePlayer()">‹ Назад</div>
-<iframe id="ytframe" src="" allowfullscreen></iframe>
-<div class="p-info">
-<div id="ptitle" style="font-weight:bold"></div>
-<button class="btn" id="dlbtn" onclick="download()">⬇ Скачать видео</button>
-<button class="btn" style="background:#212121" onclick="closePlayer()">Продолжить просмотр</button>
-</div>
-</div>
+<div id="results">Напиши название песни</div>
 
 <script>
-let tg=Telegram.WebApp; tg.expand();
-let currentId='', currentTitle='';
-async function doSearch(){
- let query=document.getElementById('q').value.trim()||'Ману бегир';
- document.getElementById('res').innerHTML='<div style="padding:20px;text-align:center">Ищу...</div>';
- try{
-  let r=await fetch('https://y.com.sb/api/v1/search?q='+encodeURIComponent(query));
-  let j=await r.json();
-  let html='';
-  j.forEach(it=>{
-    if(it.type!=='video') return;
-    let id=it.videoId;
-    let thumb=it.videoThumbnails ? it.videoThumbnails[2].url : 'https://i.ytimg.com/vi/'+id+'/mqdefault.jpg';
-    html+=`<div class="v" onclick="openPlayer('${id}','${it.title.replace(/'/g,"")}')"><img src="${thumb}"><div><div class="t">${it.title}</div><div class="c">${it.author}</div></div></div>`;
-  });
-  document.getElementById('res').innerHTML=html;
- }catch(e){ tg.sendData(query); }
+const tg = window.Telegram.WebApp;
+tg.expand();
+tg.ready();
+
+function doSearch(){
+    const query = document.getElementById('q').value.trim();
+    if(!query){ return; }
+    document.getElementById('results').innerHTML = 'Ищу...';
+    
+    // Отправляем запрос боту
+    tg.sendData(query);
+    
+    // Закрываем окно через секунду
+    setTimeout(()=>{ tg.close(); }, 500);
 }
-function openPlayer(id,title){
- currentId=id; currentTitle=title;
- document.getElementById('ytframe').src='https://www.youtube.com/embed/'+id+'?autoplay=1';
- document.getElementById('ptitle').innerText=title;
- document.getElementById('player').style.display='flex';
-}
-function closePlayer(){ document.getElementById('player').style.display='none'; document.getElementById('ytframe').src=''; }
-function download(){ tg.sendData('https://www.youtube.com/watch?v='+currentId); }
-doSearch();
+
+// Поиск по Enter
+document.getElementById('q').addEventListener('keypress', function(e){
+    if(e.key === 'Enter'){ doSearch(); }
+});
 </script>
 </body>
 </html>
