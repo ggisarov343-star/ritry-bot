@@ -2,176 +2,97 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#0f0f0f;color:#fff;font-family:Arial,sans-serif}
+body{background:#0f0f0f;color:#fff;font-family:Arial}
 .top{position:sticky;top:0;background:#0f0f0f;padding:10px;display:flex;gap:8px;z-index:10;border-bottom:1px solid #222}
-.top input{flex:1;background:#212121;border:none;border-radius:20px;padding:12px 16px;color:white;outline:none;font-size:15px}
-.top button{background:#fff;color:#000;border:none;border-radius:50%;width:42px;height:42px;font-weight:bold;cursor:pointer}
-.v{display:flex;gap:10px;padding:12px;border-bottom:1px solid #1a1a1a;cursor:pointer}
-.v img{width:150px;height:85px;border-radius:8px;object-fit:cover;background:#222;flex-shrink:0}
-.v .t{font-size:14px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.top input{flex:1;background:#212121;border:none;border-radius:20px;padding:12px 16px;color:#fff;outline:none}
+.top button{background:#fff;color:#000;border:none;border-radius:50%;width:42px;height:42px;font-weight:bold}
+.v{display:flex;gap:10px;padding:12px;border-bottom:1px solid #1a1a1a}
+.v img{width:150px;height:85px;border-radius:8px;background:#222;object-fit:cover}
+.v .t{font-size:14px}
 .v .c{font-size:12px;color:#aaa;margin-top:4px}
 #player{position:fixed;inset:0;background:#000;z-index:100;display:none;flex-direction:column;overflow-y:auto}
-.frame-wrap{width:100%;background:#000;aspect-ratio:16/9;position:relative}
-.frame-wrap iframe,#native{width:100%;height:100%;border:none;background:#000;position:absolute;inset:0}
-#native{display:none}
-.p-info{padding:12px 12px 30px}
-.p-title{font-size:16px;font-weight:bold}
-.p-chan{font-size:13px;color:#aaa;margin-top:6px}
-.btn{margin:10px 12px 0;background:#222;color:white;border:none;border-radius:12px;padding:14px;font-weight:bold;width:calc(100% - 24px);cursor:pointer;display:block;text-align:center;text-decoration:none}
-.btn.blue{background:#3ea6ff}
-.btn.green{background:#00c853;color:#000}
-.close{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;z-index:101;cursor:pointer}
+#player iframe{width:100%;aspect-ratio:16/9;border:none;background:#000}
+#player .p-info{padding:12px}
+.btn{display:block;margin:10px 12px 0;background:#222;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:bold;width:calc(100% - 24px);text-align:center;text-decoration:none}
+.btn.green{background:#00e676;color:#000}
+.btn.blue{background:#3ea6ff;color:#fff}
+.close{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.8);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;z-index:101}
 #status{text-align:center;color:#888;padding:15px;font-size:13px}
-#dl-list{display:grid;gap:8px;margin-top:12px}
 </style>
 </head>
 <body>
-<div class="top">
-<input id="q" type="text" placeholder="Марина, Фильмы, Музыка..." autocomplete="off">
-<button onclick="search()">🔍</button>
-</div>
+<div class="top"><input id="q" placeholder="Что искать?"><button onclick="search()">🔍</button></div>
 <div id="status">Напиши что искать</div>
 <div id="list"></div>
 
 <div id="player">
 <button class="close" onclick="closePlayer()">✕</button>
-<div class="frame-wrap">
-<iframe id="frm" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
-<video id="native" controls playsinline></video>
-</div>
+<iframe id="frm" allow="autoplay; encrypted-media" allowfullscreen></iframe>
 <div class="p-info">
-<div class="p-title" id="p-title"></div>
-<div class="p-chan" id="p-chan"></div>
-<div id="dl-list"></div>
-<button class="btn" onclick="closePlayer()" style="margin-top:20px">◀ Назад к списку</button>
+<div id="p-title" style="font-weight:bold"></div>
+<div id="p-chan" style="color:#aaa;font-size:13px;margin-top:4px"></div>
+<div id="dls"></div>
+<button class="btn" onclick="closePlayer()">◀ Назад</button>
 </div>
 </div>
 
 <script>
-const tg = window.Telegram.WebApp; try{tg.expand(); tg.ready();}catch(e){}
-let curBase = null, curId = null;
-
-const SERVERS = [
-  'https://vid.puffyan.us',
-  'https://yewtu.be',
-  'https://invidious.flokinet.to',
-  'https://inv.nadeko.net',
-  'https://inv.tux.pizza',
-  'https://iv.melmac.space'
-];
-
-async function tryServer(base,q){
-  const c = new AbortController();
-  setTimeout(()=>c.abort(),7000);
-  const r = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(q)}`, {signal:c.signal});
-  if(!r.ok) throw 0;
-  const data = await r.json();
-  const vids = data.filter(v=>v.type==='video').slice(0,30);
-  if(!vids.length) throw 0;
-  return {base, vids};
-}
+const tg = window.Telegram.WebApp; try{tg.expand();tg.ready();}catch(e){}
+let curBase=null;
+const SERVERS=['https://yewtu.be','https://vid.puffyan.us','https://invidious.flokinet.to'];
 
 async function search(){
-  const q = document.getElementById('q').value.trim();
-  if(!q) return;
-  document.getElementById('status').innerText=`Ищу "${q}"...`;
-  document.getElementById('list').innerHTML='';
-  let result = null;
+  const q=document.getElementById('q').value.trim(); if(!q) return;
+  document.getElementById('status').innerText='Ищу...'; document.getElementById('list').innerHTML='';
   for(let base of SERVERS){
-    try{ result = await tryServer(base,q); if(result) break; }catch(e){}
+    try{
+      const r=await fetch(base+'/api/v1/search?q='+encodeURIComponent(q),{signal:AbortSignal.timeout(6000)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      const vids=j.filter(x=>x.type==='video').slice(0,30);
+      if(!vids.length) continue;
+      curBase=base;
+      document.getElementById('status').innerText='Нашел '+vids.length+' через '+base.replace('https://','');
+      const list=document.getElementById('list'); list.innerHTML='';
+      vids.forEach((v,i)=>{
+        let thumb=v.videoThumbnails?.[1]?.url||`https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
+        if(thumb.startsWith('/')) thumb=base+thumb;
+        const d=document.createElement('div'); d.className='v';
+        d.innerHTML=`<img src="${thumb}"><div><div class="t">${i+1}. ${v.title}</div><div class="c">${v.author}</div></div>`;
+        d.onclick=()=>openPlayer(v.videoId,v.title,v.author);
+        list.appendChild(d);
+      });
+      return;
+    }catch(e){console.log('fail',base)}
   }
-  if(!result){
-    document.getElementById('status').innerText='Сервера не отвечают. Попробуй другое слово или нажми поиск еще раз.';
-    return;
-  }
-  curBase = result.base;
-  document.getElementById('status').innerText=`Нашел ${result.vids.length} видео через ${curBase.replace('https://','')}`;
-  const list = document.getElementById('list');
-  list.innerHTML='';
-  result.vids.forEach((v,i)=>{
-    let thumb = v.videoThumbnails?.[1]?.url || v.videoThumbnails?.[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/mqdefault.jpg`;
-    if(thumb.startsWith('/')) thumb = curBase + thumb;
-    const div=document.createElement('div');
-    div.className='v';
-    div.innerHTML=`<img src="${thumb}" loading="lazy"><div><div class="t">${i+1}. ${v.title}</div><div class="c">${v.author} • ${v.viewCountText||''}</div></div>`;
-    div.onclick=()=>openPlayer(v.videoId, v.title, v.author);
-    list.appendChild(div);
-  });
+  document.getElementById('status').innerText='Не нашло. Попробуй еще раз.';
 }
 
-async function openPlayer(id, title, chan){
-  curId = id;
-  document.getElementById('p-title').innerText=title;
-  document.getElementById('p-chan').innerText=chan;
+function openPlayer(id,title,author){
   document.getElementById('player').style.display='flex';
-  document.getElementById('dl-list').innerHTML='<div style="color:#888;font-size:12px">Загружаю ссылки для скачивания...</div>';
-  
-  const frm = document.getElementById('frm');
-  const native = document.getElementById('native');
-  native.style.display='none'; frm.style.display='block';
+  document.getElementById('p-title').innerText=title;
+  document.getElementById('p-chan').innerText=author;
+  document.getElementById('frm').src=curBase+'/embed/'+id+'?autoplay=1';
 
-  // ГЛАВНОЕ: грузим через Invidious embed, а не youtube.com - он работает в TJ
-  frm.src = `${curBase}/embed/${id}?autoplay=1&playsinline=1`;
-
-  // Загружаем прямые ссылки для скачивания во втором окне
-  try{
-    const c = new AbortController();
-    setTimeout(()=>c.abort(),8000);
-    const res = await fetch(`${curBase}/api/v1/videos/${id}`, {signal:c.signal});
-    const data = await res.json();
-    
-    const dl = document.getElementById('dl-list');
-    dl.innerHTML='';
-
-    // Собираем форматы
-    let formats = [...(data.formatStreams||[]), ...(data.adaptiveFormats||[])].filter(f=>f.url);
-    // Оставим только mp4 с видео+аудио для простого скачивания
-    let best = formats.filter(f=>f.container==='mp4' && f.encoding).sort((a,b)=>(parseInt(b.height)||0)-(parseInt(a.height)||0));
-    if(best.length===0) best = formats.slice(0,4);
-
-    best.slice(0,5).forEach(f=>{
-      const label = f.qualityLabel || f.quality || `${f.height||''}p ${f.container}`.trim() || f.type;
-      const a = document.createElement('a');
-      a.className='btn green';
-      a.href=f.url;
-      a.target='_blank';
-      a.textContent=`⬇ Скачать ${label}`;
-      dl.appendChild(a);
-    });
-
-    // Кнопка смотреть нативным плеером если iframe не грузится
-    const btnNative = document.createElement('button');
-    btnNative.className='btn blue';
-    btnNative.textContent='▶ Открыть нативным плеером (если не показывает)';
-    btnNative.onclick=()=>{
-      const bestVideo = best[0]?.url;
-      if(bestVideo){
-        frm.style.display='none';
-        native.style.display='block';
-        native.src = bestVideo;
-        native.play();
-      }
-    };
-    dl.appendChild(btnNative);
-
-    // Кнопка поделиться все еще нужна? Нет, убираем sendData
-  }catch(e){
-    document.getElementById('dl-list').innerHTML='<div style="color:#ff5555;font-size:12px">Не удалось загрузить ссылки, но видео выше должно играть. Попробуй другой сервер.</div>';
-  }
+  // ВОТ ТУТ СКАЧИВАНИЕ ПРЯМО ВО 2-М ОКНЕ
+  const dls=document.getElementById('dls');
+  dls.innerHTML=`
+    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=22" target="_blank">⬇ Скачать 720p (MP4)</a>
+    <a class="btn green" href="${curBase}/latest_version?id=${id}&itag=18" target="_blank">⬇ Скачать 360p (MP4)</a>
+    <a class="btn blue" href="${curBase}/latest_version?id=${id}&itag=140" target="_blank">⬇ Скачать только звук (M4A)</a>
+    <div style="color:#666;font-size:11px;text-align:center;margin-top:8px">Если не качает - нажми и держи кнопку -> Скачать по ссылке</div>
+  `;
 }
 
 function closePlayer(){
   document.getElementById('player').style.display='none';
   document.getElementById('frm').src='about:blank';
-  const native = document.getElementById('native');
-  native.pause(); native.src=''; native.style.display='none';
 }
-
-document.getElementById('q').addEventListener('keydown', e=>{ if(e.key==='Enter') search(); });
+document.getElementById('q').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 </script>
 </body>
 </html>
