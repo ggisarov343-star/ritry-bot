@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<title>Ritri YouTube</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f0f0f;color:#fff;font-family:Arial}
+.top{position:sticky;top:0;background:#0f0f0f;padding:10px;display:flex;gap:8px;border-bottom:1px solid #222;z-index:10}
+.top input{flex:1;background:#212121;border:none;border-radius:20px;padding:12px 16px;color:#fff;outline:none}
+.top button{background:#fff;color:#000;border:none;border-radius:50%;width:42px;height:42px;font-weight:bold}
+.v{display:flex;gap:10px;padding:12px;border-bottom:1px solid #1a1a1a;cursor:pointer}
+.v img{width:150px;height:85px;border-radius:8px;background:#222;object-fit:cover}
+.v .t{font-size:14px;line-height:18px}
+.v .c{font-size:12px;color:#aaa;margin-top:4px}
+#player{position:fixed;inset:0;background:#000;z-index:100;display:none;flex-direction:column;overflow-y:auto}
+#player iframe{width:100%;aspect-ratio:16/9;border:none;background:#000}
+.btn{display:block;margin:10px 12px 0;background:#222;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:bold;width:calc(100% - 24px);text-align:center;text-decoration:none;cursor:pointer}
+.btn.green{background:#00e676;color:#000}
+.btn.blue{background:#3ea6ff;color:#fff}
+.btn.red{background:#ff3b30;color:#fff}
+.close{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.8);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;z-index:101}
+#status{text-align:center;color:#888;padding:20px;line-height:20px}
+</style>
+</head>
+<body>
+<div class="top"><input id="q" placeholder="Марина - песня..."><button onclick="search()">🔍</button></div>
+<div id="status">Напиши название песни и нажми 🔍<br><small style="color:#555">Работает через GitHub</small></div>
+<div id="list"></div>
+
+<div id="player">
+<button class="close" onclick="closePlayer()">✕</button>
+<iframe id="frm" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+<div style="padding:12px">
+<div id="p-title" style="font-weight:bold"></div>
+<div id="p-chan" style="color:#aaa;font-size:12px;margin-top:4px"></div>
+<div id="dls"></div>
+<button class="btn" onclick="closePlayer()">◀ Назад к поиску</button>
+</div>
+</div>
+
+<script>
+const tg=window.Telegram.WebApp;
+try{tg.expand();tg.ready();tg.enableClosingConfirmation();}catch(e){}
+
+// Список Invidious серверов для поиска (если один заблокирован - пробуем другой)
+const SERVERS = [
+  "https://invidious.flokinet.to",
+  "https://invidious.lunar.icu",
+  "https://inv.nadeko.net",
+  "https://yt.artemislena.eu"
+];
+
+function cors(url){
+  return "https://corsproxy.io/?" + encodeURIComponent(url);
+}
+
+async function search(){
+  const q = document.getElementById('q').value.trim();
+  if(!q) return;
+  document.getElementById('status').innerText = 'Ищу "'+q+'" ...';
+  document.getElementById('list').innerHTML = '';
+
+  // Пробуем сервера по очереди
+  for(let base of SERVERS){
+    try{
+      const url = cors(base + "/api/v1/search?q=" + encodeURIComponent(q) + "&type=video");
+      const r = await fetch(url, {headers:{"User-Agent":"Mozilla"}});
+      if(!r.ok) continue;
+      const data = await r.json();
+      if(!data || !data.length) continue;
+      
+      document.getElementById('status').innerText = 'Нашел ' + data.length + ' (через ' + base.replace('https://','') + ')';
+      showList(data.slice(0,20));
+      return;
+    }catch(e){ console.log("fail "+base, e); continue; }
+  }
+  
+  // Если все Invidious заблокированы - пробуем Piped
+  try{
+    const r = await fetch(cors("https://pipedapi.kavin.rocks/search?q="+encodeURIComponent(q)));
+    const data = await r.json();
+    if(data && data.items){
+      document.getElementById('status').innerText = 'Нашел (через Piped)';
+      const vids = data.items.filter(x=>x.type=="stream").map(x=>({
+        videoId: x.url.split("v=")[1] || x.url.split("/").pop(),
+        title: x.title,
+        author: x.uploaderName,
+        videoThumbnails: [{url: x.thumbnail}]
+      }));
+      showList(vids);
+      return;
+    }
+  }catch(e){}
+
+  document.getElementById('status').innerHTML = '❌ Все сервера заблокированы в TJ<br><small>Включи VPN или используй бота в Pydroid<br>http://127.0.0.1:9191</small>';
+}
+
+function showList(vids){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  vids.forEach((v,i)=>{
+    if(!v.videoId) return;
+    const thumb = (v.videoThumbnails && v.videoThumbnails[0] ? v.videoThumbnails[0].url : "https://i.ytimg.com/vi/"+v.videoId+"/mqdefault.jpg");
+    const d = document.createElement('div');
+    d.className='v';
+    d.innerHTML = '<img src="'+thumb+'" onerror="this.src=\'https://i.ytimg.com/vi/'+v.videoId+'/mqdefault.jpg\'"><div><div class="t">'+(i+1)+'. '+(v.title||'No title')+'</div><div class="c">'+(v.author||'')+'</div></div>';
+    d.onclick = ()=>openPlayer(v.videoId, v.title, v.author);
+    list.appendChild(d);
+  });
+}
+
+function openPlayer(id,title,author){
+  document.getElementById('player').style.display='flex';
+  document.getElementById('p-title').innerText = title;
+  document.getElementById('p-chan').innerText = author;
+  
+  // Пробуем 2 варианта плеера - обычный и nocookie (nocookie меньше блокируется в TJ)
+  document.getElementById('frm').src = 'https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&modestbranding=1&rel=0';
+  
+  document.getElementById('dls').innerHTML = 
+    '<a class="btn green" onclick="downloadVideo(\''+id+'\',\'720\')">⬇ Скачать 720p (2-е окно)</a>'+
+    '<a class="btn green" onclick="downloadVideo(\''+id+'\',\'360\')">⬇ Скачать 360p</a>'+
+    '<a class="btn blue" onclick="downloadVideo(\''+id+'\',\'mp3\')">⬇ Скачать MP3 (звук)</a>'+
+    '<button class="btn red" onclick="sendToBot(\''+id+'\')">⬇ Отправить в бот для скачки</button>'+
+    '<small style="display:block;text-align:center;color:#555;margin-top:10px">Если видео не играет - нажми "Отправить в бот"</small>';
+}
+
+async function downloadVideo(id, quality){
+  document.getElementById('status').innerText = 'Готовлю ссылку...';
+  try{
+    // Используем Cobalt API для прямого скачивания во втором окне (работает без твоего сервера)
+    const res = await fetch("https://api.cobalt.tools/api/json", {
+      method:"POST",
+      headers:{"Content-Type":"application/json", "Accept":"application/json"},
+      body: JSON.stringify({url:"https://www.youtube.com/watch?v="+id, vCodec:"h264", vQuality: quality=="720"?"720":"360", aFormat: quality=="mp3"?"mp3":"mp3", isAudioOnly: quality=="mp3"})
+    });
+    const data = await res.json();
+    if(data && data.url){
+      window.open(data.url, "_blank");
+    }else{
+      // fallback - открываем через Piped напрямую
+      window.open("https://piped.video/watch?v="+id, "_blank");
+    }
+  }catch(e){
+    // Если Cobalt заблокирован - просто открываем ютуб
+    window.open("https://www.youtube.com/watch?v="+id, "_blank");
+  }
+}
+
+function sendToBot(id){
+  const url = 'https://www.youtube.com/watch?v='+id;
+  try{
+    tg.sendData(url);
+    tg.close();
+  }catch(e){
+    // если открыто не из Telegram а из браузера - копируем
+    prompt("Скопируй ссылку в бота:", url);
+  }
+}
+
+function closePlayer(){
+  document.getElementById('player').style.display='none';
+  document.getElementById('frm').src='about:blank';
+}
+
+document.getElementById('q').addEventListener('keydown', e=>{ if(e.key==='Enter') search(); });
+</script>
+</body>
+</html>
