@@ -1,114 +1,188 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>YouTube Player</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RITRY YouTube</title>
 
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-<style>
-body {
-    background: #101820;
-    color: white;
-    font-family: Arial;
-    text-align: center;
-    padding: 20px;
-}
+    <style>
+        * {
+            box-sizing: border-box;
+        }
 
-h2 {
-    color: #ff3333;
-}
+        body {
+            margin: 0;
+            padding: 25px 18px;
+            min-height: 100vh;
+            background: #101820;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
 
-input {
-    width: 90%;
-    padding: 14px;
-    border-radius: 10px;
-    border: none;
-    margin: 15px 0;
-}
+        h1 {
+            color: #ff3038;
+            margin-top: 45px;
+            font-size: 30px;
+        }
 
-button {
-    padding: 14px 25px;
-    background: #ff3333;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    font-size: 16px;
-}
+        .section {
+            margin-top: 35px;
+        }
 
-#player {
-    margin-top: 25px;
-}
+        h2 {
+            font-size: 20px;
+            margin-bottom: 18px;
+        }
 
-iframe {
-    width: 100%;
-    aspect-ratio: 16/9;
-    border: none;
-    border-radius: 12px;
-}
-</style>
+        input {
+            width: 100%;
+            padding: 18px;
+            border: none;
+            border-radius: 15px;
+            font-size: 16px;
+            outline: none;
+            margin-bottom: 15px;
+        }
+
+        button {
+            width: 85%;
+            padding: 17px;
+            border: none;
+            border-radius: 15px;
+            background: #ff3038;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        button:active {
+            opacity: 0.8;
+        }
+
+        .line {
+            height: 1px;
+            background: #39434c;
+            margin: 35px 0;
+        }
+
+        .hint {
+            color: #b8c1ca;
+            font-size: 13px;
+            margin-top: 12px;
+        }
+
+        #status {
+            margin-top: 20px;
+            color: #8de6a5;
+        }
+    </style>
 </head>
 
 <body>
 
-<h2>▶ YouTube Player</h2>
+    <h1>▶ RITRY YouTube</h1>
 
-<p>Вставь ссылку на YouTube:</p>
+    <div class="section">
 
-<input id="link" placeholder="https://youtube.com/watch?v=...">
+        <h2>🔍 Поиск видео и музыки</h2>
 
-<br>
+        <input
+            type="text"
+            id="searchInput"
+            placeholder="Название видео или песни..."
+        >
 
-<button onclick="playVideo()">Смотреть видео</button>
+        <button onclick="searchContent()">
+            🔍 Найти
+        </button>
 
-<div id="player"></div>
+        <p class="hint">
+            Введи название видео, исполнителя или песни
+        </p>
 
-<script>
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+    </div>
 
-function playVideo() {
-    let link = document.getElementById("link").value.trim();
+    <div class="line"></div>
 
-    let videoId = "";
+    <div class="section">
 
-    try {
-        let url = new URL(link);
+        <h2>🎬 Поиск по ссылке</h2>
 
-        if (url.hostname === "youtu.be") {
-            videoId = url.pathname.slice(1);
-        } else if (
-            url.hostname === "youtube.com" ||
-            url.hostname === "www.youtube.com" ||
-            url.hostname === "m.youtube.com"
-        ) {
-            videoId = url.searchParams.get("v") || "";
+        <input
+            type="url"
+            id="urlInput"
+            placeholder="https://youtube.com/watch?v=..."
+        >
 
-            if (!videoId && url.pathname.startsWith("/embed/")) {
-                videoId = url.pathname.split("/")[2];
+        <button onclick="openVideo()">
+            ▶ Открыть видео
+        </button>
+
+    </div>
+
+    <p id="status"></p>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+
+        tg.ready();
+        tg.expand();
+
+        function searchContent() {
+            const query = document
+                .getElementById("searchInput")
+                .value.trim();
+
+            if (!query) {
+                document.getElementById("status").innerText =
+                    "Введите название видео или песни";
+                return;
+            }
+
+            document.getElementById("status").innerText =
+                "🔍 Выполняю поиск...";
+
+            tg.sendData(query);
+        }
+
+        function openVideo() {
+            const url = document
+                .getElementById("urlInput")
+                .value.trim();
+
+            if (!url) {
+                document.getElementById("status").innerText =
+                    "Вставьте ссылку";
+                return;
+            }
+
+            try {
+                const parsed = new URL(url);
+
+                const host = parsed.hostname.toLowerCase();
+
+                const allowed =
+                    host === "youtube.com" ||
+                    host.endsWith(".youtube.com") ||
+                    host === "youtu.be";
+
+                if (parsed.protocol !== "https:" || !allowed) {
+                    document.getElementById("status").innerText =
+                        "Введите правильную ссылку YouTube";
+                    return;
+                }
+
+                tg.sendData(url);
+
+            } catch (e) {
+                document.getElementById("status").innerText =
+                    "Неправильная ссылка";
             }
         }
-    } catch (e) {
-        alert("Неправильная ссылка!");
-        return;
-    }
-
-    if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
-        alert("Проверь ссылку YouTube!");
-        return;
-    }
-
-    document.getElementById("player").innerHTML = `
-        <iframe
-        src="https://www.youtube.com/embed/${videoId}"
-        allowfullscreen
-        allow="autoplay; encrypted-media; picture-in-picture">
-        </iframe>
-    `;
-}
-</script>
+    </script>
 
 </body>
 </html>
